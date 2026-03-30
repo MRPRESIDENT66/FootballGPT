@@ -1,0 +1,61 @@
+"""Analyst Agent — analyzes player data. Limited to 2 tool calls max."""
+
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
+
+from config.settings import settings
+from tools.player_db import compare_players, get_player_details
+
+ANALYST_PROMPT = """You are a professional football data analyst. Analyze the player data provided.
+
+You have tools available but the data is already provided below — only use tools if you need to compare two specific players side by side.
+
+When analyzing:
+1. Compare key stats relevant to the position
+2. Evaluate attributes (pace, shooting, passing, dribbling, defending, physical)
+3. Consider age, development potential, and market value
+4. Highlight standout stats and weaknesses
+
+Be concise and data-driven. Limit to 300 words."""
+
+
+def run_analyst(player_data: str, criteria: dict, query: str) -> str:
+    """Run the analyst agent. Max 2 tool call rounds."""
+    llm = ChatOpenAI(
+        model=settings.LLM_MODEL,
+        api_key=settings.DASHSCOPE_API_KEY,
+        base_url=settings.DASHSCOPE_BASE_URL,
+        temperature=settings.TEMPERATURE,
+        **settings.NO_THINKING,
+    ).bind_tools([compare_players, get_player_details])
+
+    messages = [
+        SystemMessage(content=ANALYST_PROMPT),
+        HumanMessage(
+            content=(
+                f"User query: {query}\n"
+                f"Criteria: {criteria}\n"
+                f"Player data:\n{player_data}\n\n"
+                "Analyze briefly. Use tools only if needed for direct comparison."
+            )
+        ),
+    ]
+
+    tool_map = {
+        "compare_players": compare_players,
+        "get_player_details": get_player_details,
+    }
+
+    for _ in range(2):  # max 2 rounds
+        response = llm.invoke(messages)
+        messages.append(response)
+
+        if not response.tool_calls:
+            return response.content
+
+        for tc in response.tool_calls:
+            result = tool_map[tc["name"]].invoke(tc["args"])
+            messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
+
+    messages.append(HumanMessage(content="Summarize your analysis now. No more tool calls."))
+    return llm.invoke(messages).content
