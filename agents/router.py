@@ -38,11 +38,12 @@ Important rules:
 - For "recommend" intent, team must be specified
 - For "scout" intent, at least one filter criterion should be extracted
 - If the user mentions speed/fast/quick, map to min_pace (e.g., "fast" = min_pace 85)
+- If the user's query contains pronouns like "he", "him", "them", "that player", "compare him with", etc., resolve them using conversation history
 - Output ONLY the JSON, no other text"""
 
 
-def route_query(query: str) -> dict:
-    """Classify user intent and extract parameters."""
+def route_query(query: str, chat_history: list[dict] | None = None) -> dict:
+    """Classify user intent and extract parameters, using chat history for context."""
     import json
 
     llm = ChatOpenAI(
@@ -52,9 +53,17 @@ def route_query(query: str) -> dict:
         temperature=0.1,
     )
 
+    # Build context from semantically relevant past turns (vector memory)
+    context = ""
+    if chat_history:
+        history_lines = []
+        for turn in chat_history:
+            history_lines.append(f"[Turn {turn.get('turn', '?')}] {turn['content']}")
+        context = "Relevant past conversation:\n" + "\n\n".join(history_lines) + "\n\n"
+
     messages = [
         SystemMessage(content=ROUTER_PROMPT),
-        HumanMessage(content=query),
+        HumanMessage(content=f"{context}Current query: {query}" if context else query),
     ]
 
     response = llm.invoke(messages)

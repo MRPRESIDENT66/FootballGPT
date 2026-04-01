@@ -5,18 +5,26 @@ Optimized flow with parallel execution:
   - scout:     Router → Scout → Analyst → Reporter
   - compare:   Router → Analyst → Reporter
   - tactics:   Router → Tactics → Reporter
+
+Supports multi-turn conversation via MemorySaver checkpointing.
 """
 
-from typing import TypedDict
+from typing import TypedDict, Annotated
+from operator import add
 
 from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
 
 from agents.router import route_query
 from agents.scout import run_scout
 from agents.analyst import run_analyst
 from agents.tactics import run_tactics
 from agents.reporter import run_reporter
+from knowledge.memory import VectorMemory
 from utils import clean_surrogates
+
+# Global vector memory instance — shared across turns within a session
+_vector_memory = VectorMemory()
 
 
 class FootballState(TypedDict):
@@ -27,13 +35,16 @@ class FootballState(TypedDict):
     analysis: str
     tactical_context: str
     report: str
+    chat_history: Annotated[list[dict], add]  # accumulates across turns
 
 
 # ---- Node functions ----
 
 def router_node(state: FootballState) -> dict:
-    """Classify intent and extract parameters."""
-    result = route_query(state["query"])
+    """Classify intent and extract parameters, with vector memory for context."""
+    # Retrieve semantically relevant past turns instead of fixed sliding window
+    relevant_history = _vector_memory.retrieve(state["query"], k=3)
+    result = route_query(state["query"], relevant_history)
     return {
         "intent": result["intent"],
         "parameters": result.get("parameters", {}),
@@ -60,14 +71,22 @@ def tactics_node(state: FootballState) -> dict:
 
 
 def reporter_node(state: FootballState) -> dict:
-    """Generate final report."""
+    """Generate final report and store turn in vector memory."""
     report = clean_surrogates(run_reporter(
         state["query"],
         state.get("scout_data", ""),
         state.get("analysis", ""),
         state.get("tactical_context", ""),
     ))
-    return {"report": report}
+    # Store this turn in vector memory for semantic retrieval in future turns
+    _vector_memory.add_turn(state["query"], state["intent"], report)
+
+    turn_record = {
+        "query": state["query"],
+        "intent": state["intent"],
+        "report_summary": report[:500],
+    }
+    return {"report": report, "chat_history": [turn_record]}
 
 
 # ---- Conditional routing ----
@@ -100,8 +119,9 @@ def after_tactics(state: FootballState) -> str:
 
 # ---- Build the graph ----
 
-def build_workflow() -> StateGraph:
-    """Build and compile the multi-agent workflow graph."""
+def build_workflow():
+    """Build and compile the multi-agent workflow graph with memory."""
+    memory = MemorySaver()
     workflow = StateGraph(FootballState)
 
     # Add nodes
@@ -143,4 +163,4 @@ def build_workflow() -> StateGraph:
     # Reporter is the end
     workflow.add_edge("reporter", END)
 
-    return workflow.compile()
+    return workflow.compile(checkpointer=memory)

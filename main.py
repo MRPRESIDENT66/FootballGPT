@@ -1,6 +1,7 @@
 """FootballGPT — AI Football Analysis Platform with Multi-Agent Collaboration."""
 
 import time
+import uuid
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -22,6 +23,8 @@ Example queries:
   • Compare Salah and Mbappe this season
   • Analyze Barcelona's tactical system and weaknesses
   • Recommend a striker for Arsenal, budget under 100M
+
+Multi-turn supported — follow up with "compare him with..." or "what about his stats?"
 
 Type quit to exit
 """
@@ -49,6 +52,11 @@ def run():
     display_banner()
     app = build_workflow()
 
+    # Each session gets a unique thread_id for conversation memory
+    thread_id = str(uuid.uuid4())
+    config = {"configurable": {"thread_id": thread_id}}
+    turn_count = 0
+
     while True:
         console.print()
         query = console.input("[bold green]Query > [/]").strip()
@@ -56,6 +64,9 @@ def run():
             console.print("[dim]Goodbye! ⚽[/]")
             break
 
+        turn_count += 1
+        # LangGraph 所用，每个agent工作完都只是填充这个state
+        # Only set query — other fields reset per turn, chat_history accumulates via MemorySaver
         initial_state = {
             "query": query,
             "intent": "",
@@ -70,7 +81,9 @@ def run():
             start = time.time()
             result = None
 
-            for event in app.stream(initial_state):
+            console.print(f"  [dim]Turn {turn_count}[/]")
+
+            for event in app.stream(initial_state, config=config):
                 for node_name, node_output in event.items():
                     label = NODE_LABELS.get(node_name, node_name)
                     elapsed = time.time() - start
