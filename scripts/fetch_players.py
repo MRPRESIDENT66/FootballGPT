@@ -64,6 +64,33 @@ ALL_TEAMS = [
     {"id": 497, "name": "Roma", "league": "Serie A"},
     {"id": 80, "name": "Lyon", "league": "Ligue 1"},
     {"id": 81, "name": "Marseille", "league": "Ligue 1"},
+    # Day 3 — more top clubs
+    {"id": 35, "name": "Bournemouth", "league": "Premier League"},
+    {"id": 51, "name": "Brighton", "league": "Premier League"},
+    {"id": 39, "name": "Wolves", "league": "Premier League"},
+    {"id": 45, "name": "Everton", "league": "Premier League"},
+    {"id": 55, "name": "Brentford", "league": "Premier League"},
+    {"id": 63, "name": "Fulham", "league": "Premier League"},
+    {"id": 532, "name": "Valencia", "league": "La Liga"},
+    {"id": 533, "name": "Villarreal", "league": "La Liga"},
+    {"id": 543, "name": "Real Betis", "league": "La Liga"},
+    {"id": 162, "name": "Werder Bremen", "league": "Bundesliga"},
+    {"id": 163, "name": "Borussia Monchengladbach", "league": "Bundesliga"},
+    {"id": 172, "name": "VfB Stuttgart", "league": "Bundesliga"},
+    {"id": 502, "name": "Fiorentina", "league": "Serie A"},
+    {"id": 499, "name": "Atalanta", "league": "Serie A"},
+    {"id": 500, "name": "Bologna", "league": "Serie A"},
+    {"id": 79, "name": "Lille", "league": "Ligue 1"},
+    {"id": 91, "name": "Monaco", "league": "Ligue 1"},
+    {"id": 94, "name": "Rennes", "league": "Ligue 1"},
+    # Primeira Liga
+    {"id": 212, "name": "FC Porto", "league": "Primeira Liga"},
+    {"id": 211, "name": "Benfica", "league": "Primeira Liga"},
+    {"id": 228, "name": "Sporting CP", "league": "Primeira Liga"},
+    # Eredivisie
+    {"id": 194, "name": "Ajax", "league": "Eredivisie"},
+    {"id": 197, "name": "PSV Eindhoven", "league": "Eredivisie"},
+    {"id": 203, "name": "Feyenoord", "league": "Eredivisie"},
 ]
 
 request_count = 0
