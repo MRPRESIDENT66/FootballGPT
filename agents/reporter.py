@@ -53,4 +53,35 @@ def run_reporter(query: str, scout_data: str, analysis: str, tactical_context: s
         HumanMessage(content="\n\n".join(parts)),
     ]
 
-    return llm.invoke(messages).content
+    report = llm.invoke(messages).content
+
+    # Self-correction: LLM evaluates its own report, regenerates if quality is low
+    eval_prompt = f"""Rate the following report on a scale of 1-10 based on:
+- Does it directly answer the user's query: "{query}"?
+- Does it include specific stats and facts (not vague)?
+- Is it well-structured and complete?
+
+Report:
+{report}
+
+Respond with ONLY a JSON object: {{"score": <int>, "feedback": "<what's missing or wrong>"}}"""
+
+    eval_response = llm.invoke([HumanMessage(content=eval_prompt)]).content
+
+    try:
+        import json
+        eval_result = json.loads(eval_response.strip().strip("`").strip("json").strip())
+        score = eval_result.get("score", 10)
+        feedback = eval_result.get("feedback", "")
+
+        if score < 7 and feedback:
+            # Regenerate with self-correction feedback
+            messages.append(HumanMessage(
+                content=f"Your report scored {score}/10. Issues: {feedback}\n"
+                        f"Please regenerate the report addressing these issues."
+            ))
+            report = llm.invoke(messages).content
+    except (json.JSONDecodeError, KeyError):
+        pass  # If eval parsing fails, keep original report
+
+    return report

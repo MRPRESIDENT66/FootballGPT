@@ -68,4 +68,25 @@ def run_analyst(player_data: str, criteria: dict, query: str) -> str:
             messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
 
     messages.append(HumanMessage(content="Summarize your analysis now. No more tool calls."))
-    return llm.invoke(messages).content
+    analysis = llm.invoke(messages).content
+
+    # Reflection: self-evaluate whether the analysis answers the user's query
+    reflection_prompt = f"""Reflect on your analysis. The user asked: "{query}"
+
+Your analysis:
+{analysis}
+
+Does your analysis fully answer the user's question? Is anything missing (key players, important stats, a clear conclusion)?
+If yes, respond with ONLY: "PASS"
+If no, respond with what's missing and provide the corrected analysis."""
+
+    reflection = llm.invoke([
+        SystemMessage(content="You are a quality reviewer for football analysis."),
+        HumanMessage(content=reflection_prompt),
+    ]).content
+
+    if "PASS" not in reflection.upper().split("\n")[0]:
+        # Reflection found issues — use the corrected version
+        return reflection
+
+    return analysis
