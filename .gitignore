@@ -21,5 +21,9 @@ venv/
 .DS_Store
 Thumbs.db
 
+# Vector store data (binary, regenerate via python -m knowledge.ingest)
+data/qdrant_store/
+data/memory_store/
+
 # Claude
 .claude/

@@ -40,14 +40,45 @@ class FootballState(TypedDict):
 
 # ---- Node functions ----
 
+def _validate_routing(intent: str, params: dict) -> bool:
+    """Validate that Router output is consistent — intent matches parameters."""
+    if intent == "compare":
+        names = params.get("player_names", [])
+        if not names or len(names) < 2:
+            return False
+    elif intent == "recommend":
+        if not params.get("team"):
+            return False
+    elif intent == "scout":
+        # Scout should have at least one filter criterion
+        filters = ["position", "max_age", "min_age", "league", "club",
+                   "nationality", "min_pace", "max_market_value", "min_goals"]
+        if not any(params.get(f) for f in filters):
+            return False
+    return True
+
+
 def router_node(state: FootballState) -> dict:
-    """Classify intent and extract parameters, with vector memory for context."""
-    # Retrieve semantically relevant past turns instead of fixed sliding window
+    """Classify intent and extract parameters, with validation and retry."""
     relevant_history = _vector_memory.retrieve(state["query"], k=3)
+
     result = route_query(state["query"], relevant_history)
+    intent = result["intent"]
+    params = result.get("parameters", {})
+
+    # Validate: if intent and parameters don't match, retry once
+    if not _validate_routing(intent, params):
+        result = route_query(state["query"], relevant_history)
+        intent = result["intent"]
+        params = result.get("parameters", {})
+
+        # Still invalid → fallback to scout (safest default)
+        if not _validate_routing(intent, params):
+            intent = "scout"
+
     return {
-        "intent": result["intent"],
-        "parameters": result.get("parameters", {}),
+        "intent": intent,
+        "parameters": params,
     }
 
 

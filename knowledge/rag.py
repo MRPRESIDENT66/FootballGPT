@@ -1,58 +1,38 @@
-"""RAG knowledge base — loads team profiles into FAISS for retrieval."""
+"""RAG knowledge base — retrieves football knowledge from Qdrant.
 
-import json
-import os
+Replaces the old FAISS + team_profiles.json approach with Qdrant-backed
+Wikipedia knowledge (players, teams, seasons) with payload filtering.
+"""
 
-from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings
-from langchain_core.documents import Document
 from langchain_core.tools import tool
 
-from config.settings import settings
+from knowledge.qdrant_store import FootballKnowledgeStore
 
-_vectorstore = None
+_store = None
 
 
-def _build_vectorstore() -> FAISS:
-    global _vectorstore
-    if _vectorstore is not None:
-        return _vectorstore
-
-    path = os.path.join(settings.KNOWLEDGE_DIR, "team_profiles.json")
-    with open(path, "r", encoding="utf-8") as f:
-        teams = json.load(f)
-
-    documents = []
-    for team in teams:
-        content = (
-            f"Team: {team['team']}\n"
-            f"League: {team['league']}\n"
-            f"Manager: {team['manager']}\n"
-            f"Formation: {team['formation']}\n"
-            f"Style: {team['style']}\n"
-            f"Strengths: {', '.join(team['strengths'])}\n"
-            f"Weaknesses: {', '.join(team['weaknesses'])}\n"
-            f"Key Players: {', '.join(team['key_players'])}\n"
-            f"Transfer Needs: {', '.join(team['transfer_needs'])}\n"
-            f"Budget: {team['budget_estimate_million_eur']}M EUR\n"
-            f"Tactical Notes: {team['tactical_notes']}"
-        )
-        documents.append(Document(page_content=content, metadata={"team": team["team"]}))
-
-    embeddings = OpenAIEmbeddings(
-        model=settings.EMBEDDING_MODEL,
-        api_key=settings.DASHSCOPE_API_KEY,
-        base_url=settings.DASHSCOPE_BASE_URL,
-        check_embedding_ctx_length=False,
-    )
-    _vectorstore = FAISS.from_documents(documents, embeddings)
-    return _vectorstore
+def _get_store() -> FootballKnowledgeStore:
+    global _store
+    if _store is None:
+        _store = FootballKnowledgeStore()
+    return _store
 
 
 @tool
 def search_football_knowledge(query: str) -> str:
-    """Search the football knowledge base for tactical info, team profiles, and transfer needs.
-    Use this to understand team styles, formations, strengths, and weaknesses."""
-    vs = _build_vectorstore()
-    docs = vs.similarity_search(query, k=3)
-    return "\n\n---\n\n".join(doc.page_content for doc in docs)
+    """Search the football knowledge base for player backgrounds, team history,
+    tactical styles, youth academy info, transfer history, and season data.
+    Use this to get real-world context beyond raw statistics."""
+    store = _get_store()
+    results = store.search(query, limit=5)
+
+    if not results:
+        return "No relevant knowledge found."
+
+    pieces = []
+    for r in results:
+        source = r.get("source_url", "")
+        header = f"[{r.get('entity_type', '')}] {r.get('name', '')} — {r.get('section', '')}"
+        pieces.append(f"{header}\n{r['text']}\n({source})")
+
+    return "\n\n---\n\n".join(pieces)
