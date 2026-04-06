@@ -97,7 +97,8 @@ def run():
             console.print()
 
             if result and result.get("report"):
-                console.print(Panel(Markdown(result["report"]), title="📝 Analysis Report", border_style="blue"))
+                console.print()
+                console.print(Markdown(result["report"]))
             else:
                 console.print("[yellow]No report generated.[/]")
 

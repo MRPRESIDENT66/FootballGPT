@@ -1,10 +1,11 @@
-"""Analyst Agent — analyzes player data. Limited to 2 tool calls max."""
+"""Analyst Agent — analyzes player data with Wikipedia context. Limited to 2 tool calls max."""
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 
 from config.settings import settings
 from tools.player_db import compare_players, get_player_details
+from knowledge.rag import retrieve_knowledge
 
 ANALYST_PROMPT = """You are a professional football data analyst. Analyze the player data provided.
 
@@ -15,6 +16,7 @@ When analyzing:
 2. Evaluate attributes (pace, shooting, passing, dribbling, defending, physical)
 3. Consider age, development potential, and market value
 4. Highlight standout stats and weaknesses
+5. Reference the Wikipedia background (career history, honours, playing style) when available
 
 Be concise and data-driven. Limit to 300 words."""
 
@@ -29,16 +31,17 @@ def run_analyst(player_data: str, criteria: dict, query: str) -> str:
         **settings.NO_THINKING,
     ).bind_tools([compare_players, get_player_details])
 
+    # RAG: retrieve relevant player backgrounds for richer analysis
+    knowledge = retrieve_knowledge(query, entity_type="player", limit=5)
+
+    content = f"User query: {query}\nCriteria: {criteria}\nPlayer data:\n{player_data}\n\n"
+    if knowledge:
+        content += f"Wikipedia background:\n{knowledge}\n\n"
+    content += "Analyze briefly. Use tools only if needed for direct comparison."
+
     messages = [
         SystemMessage(content=ANALYST_PROMPT),
-        HumanMessage(
-            content=(
-                f"User query: {query}\n"
-                f"Criteria: {criteria}\n"
-                f"Player data:\n{player_data}\n\n"
-                "Analyze briefly. Use tools only if needed for direct comparison."
-            )
-        ),
+        HumanMessage(content=content),
     ]
 
     tool_map = {

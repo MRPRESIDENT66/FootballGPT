@@ -1,25 +1,28 @@
-"""Reporter Agent — synthesizes all findings into a final report."""
+"""Reporter Agent — synthesizes all findings into a final report, enriched with knowledge base."""
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from config.settings import settings
+from knowledge.rag import retrieve_knowledge
 
-REPORTER_PROMPT = """You are a football report writer. Synthesize the analysis below into a clear final report.
+REPORTER_PROMPT = """You are a football report writer. Synthesize the analysis below into a clear, detailed report.
 
 Format:
-1. Executive summary (2-3 sentences)
-2. Key findings with specific stats
-3. Recommendation / conclusion
+1. **Summary** — 3-5 sentences overview
+2. **Top Picks** — for each candidate:
+   - Name (Age, Club, Nationality)
+   - Key stats and strengths
+   - Wikipedia background (career highlights, honours, playing style)
+   - Risks or concerns
+3. **Verdict** — final recommendation with reasoning
 
 Guidelines:
-- Use markdown formatting
-- Include data tables where appropriate
-- For scouting: rank players, include key stats, note risks
-- For comparison: clear verdict with evidence
-- For tactics: formation diagram, specific suggestions
-- Always output in English
-- Keep it focused — no fluff"""
+- Use bullet points, avoid wide tables
+- Reference Wikipedia background to add depth (career trajectory, honours, style descriptions)
+- Be specific with stats and facts, not vague
+- Reply in the same language as the user's query
+- No filler or disclaimers"""
 
 
 def run_reporter(query: str, scout_data: str, analysis: str, tactical_context: str) -> str:
@@ -39,6 +42,11 @@ def run_reporter(query: str, scout_data: str, analysis: str, tactical_context: s
         parts.append(f"## Analysis\n{analysis}")
     if tactical_context:
         parts.append(f"## Tactical Context\n{tactical_context}")
+
+    # RAG: add team/season background for richer reports
+    knowledge = retrieve_knowledge(query, limit=5)
+    if knowledge:
+        parts.append(f"## Wikipedia Background\n{knowledge}")
 
     messages = [
         SystemMessage(content=REPORTER_PROMPT),

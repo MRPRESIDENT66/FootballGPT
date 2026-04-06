@@ -1,10 +1,11 @@
-"""Scout Agent — searches players directly from database, no LLM needed."""
+"""Scout Agent — searches players from database and enriches with Wikipedia knowledge."""
 
 from tools.player_db import search_players, get_player_details, get_team_roster
+from knowledge.rag import retrieve_knowledge
 
 
 def run_scout(criteria: dict, query: str) -> str:
-    """Search players directly using criteria. No LLM call — pure data lookup."""
+    """Search players using criteria, then enrich top results with Wikipedia background."""
     # Build search args from router-extracted parameters
     search_args = {}
     param_map = {
@@ -30,5 +31,16 @@ def run_scout(criteria: dict, query: str) -> str:
     if team:
         roster = get_team_roster.invoke({"club_name": team})
         result += f"\n\n--- Current {team} roster in database ---\n{roster}"
+
+    # RAG: enrich with Wikipedia background (playing style, career history)
+    knowledge = retrieve_knowledge(
+        query,
+        entity_type="player",
+        position=criteria.get("position"),
+        league=criteria.get("league"),
+        limit=5,
+    )
+    if knowledge:
+        result += f"\n\n--- Wikipedia Background ---\n{knowledge}"
 
     return result
