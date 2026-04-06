@@ -123,7 +123,10 @@ class FootballKnowledgeStore:
         Returns:
             List of dicts with 'text', 'score', and payload fields.
         """
-        query_vector = self._embeddings.embed_query(query)
+        if not query or not isinstance(query, str):
+            return []
+
+        query_vector = self._embeddings.embed_query(str(query))
 
         # Build filter conditions
         must_conditions = []

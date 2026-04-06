@@ -7,6 +7,7 @@ Optimized flow with parallel execution:
   - tactics:   Router → Tactics → Reporter
 
 Supports multi-turn conversation via MemorySaver checkpointing.
+LangSmith tracing enabled when LANGCHAIN_TRACING_V2=true (zero-code integration).
 """
 
 from typing import TypedDict, Annotated
@@ -22,6 +23,7 @@ from agents.tactics import run_tactics
 from agents.reporter import run_reporter
 from knowledge.memory import VectorMemory
 from utils import clean_surrogates
+from config.settings import settings
 
 # Global vector memory instance — shared across turns within a session
 _vector_memory = VectorMemory()
@@ -151,7 +153,14 @@ def after_tactics(state: FootballState) -> str:
 # ---- Build the graph ----
 
 def build_workflow():
-    """Build and compile the multi-agent workflow graph with memory."""
+    """Build and compile the multi-agent workflow graph with memory.
+
+    LangSmith tracing is automatic when LANGCHAIN_TRACING_V2=true.
+    All LLM calls, tool invocations, and state transitions are captured.
+    """
+    if settings.LANGSMITH_TRACING:
+        print(f"🔍 LangSmith tracing enabled → project: {settings.LANGSMITH_PROJECT}")
+
     memory = MemorySaver()
     workflow = StateGraph(FootballState)
 

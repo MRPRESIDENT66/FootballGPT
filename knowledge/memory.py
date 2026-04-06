@@ -40,10 +40,10 @@ class VectorMemory:
 
     def retrieve(self, query: str, k: int = 3) -> list[dict]:
         """Retrieve the most relevant past turns for the current query."""
-        if self._store is None:
+        if self._store is None or not query or not isinstance(query, str):
             return []
 
-        docs = self._store.similarity_search(query, k=k)
+        docs = self._store.similarity_search(str(query), k=k)
         return [
             {
                 "turn": doc.metadata["turn"],

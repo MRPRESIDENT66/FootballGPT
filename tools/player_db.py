@@ -114,3 +114,163 @@ def get_team_roster(club_name: str) -> str:
     if not roster:
         return f"No players found for club '{club_name}'."
     return json.dumps(roster, ensure_ascii=False, indent=2)
+
+
+@tool
+def get_top_scorers(league: Optional[str] = None, position: Optional[str] = None, limit: int = 10) -> str:
+    """Get top scorers ranked by goals. Optionally filter by league and/or position.
+    Useful for questions like 'who scores the most in La Liga' or 'top scoring midfielders'."""
+    players = _load_players()
+
+    filtered = []
+    for p in players:
+        if league and league.lower() not in p.get("league", "").lower():
+            continue
+        if position and position.upper() not in p.get("position", "").upper():
+            continue
+        goals = p.get("stats", {}).get("goals", 0) or 0
+        if goals > 0:
+            filtered.append(p)
+
+    filtered.sort(key=lambda p: p.get("stats", {}).get("goals", 0) or 0, reverse=True)
+    filtered = filtered[:limit]
+
+    if not filtered:
+        return "No players found matching the criteria."
+
+    results = []
+    for rank, p in enumerate(filtered, 1):
+        s = p.get("stats", {})
+        results.append({
+            "rank": rank,
+            "name": p["name"],
+            "club": p.get("club"),
+            "league": p.get("league"),
+            "position": p.get("position"),
+            "age": p.get("age"),
+            "goals": s.get("goals", 0),
+            "assists": s.get("assists", 0),
+            "appearances": s.get("appearances", 0),
+            "goals_per_90": s.get("goals_per_90", 0),
+        })
+    return json.dumps(results, ensure_ascii=False, indent=2)
+
+
+@tool
+def get_team_stats(club_name: str) -> str:
+    """Get aggregated team statistics: average age, total goals/assists, position breakdown,
+    top scorer, and squad depth. Useful for tactical analysis and transfer planning."""
+    players = _load_players()
+    roster = [p for p in players if club_name.lower() in p.get("club", "").lower()]
+
+    if not roster:
+        return f"No players found for club '{club_name}'."
+
+    # Position breakdown
+    position_counts = {}
+    for p in roster:
+        pos = p.get("position", "Unknown")
+        position_counts[pos] = position_counts.get(pos, 0) + 1
+
+    # Aggregate stats
+    ages = [p["age"] for p in roster if p.get("age")]
+    total_goals = sum(p.get("stats", {}).get("goals", 0) or 0 for p in roster)
+    total_assists = sum(p.get("stats", {}).get("assists", 0) or 0 for p in roster)
+
+    # Top scorer
+    top_scorer = max(roster, key=lambda p: p.get("stats", {}).get("goals", 0) or 0)
+
+    # Nationality diversity
+    nationalities = set(p.get("nationality", "") for p in roster if p.get("nationality"))
+
+    result = {
+        "club": club_name,
+        "squad_size": len(roster),
+        "average_age": round(sum(ages) / len(ages), 1) if ages else None,
+        "position_breakdown": position_counts,
+        "total_goals": total_goals,
+        "total_assists": total_assists,
+        "top_scorer": {
+            "name": top_scorer["name"],
+            "goals": top_scorer.get("stats", {}).get("goals", 0),
+        },
+        "nationalities": len(nationalities),
+        "nationality_list": sorted(nationalities),
+    }
+    return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+# Stats used for similarity calculation
+_SIMILARITY_KEYS = [
+    "goals_per_90", "assists_per_90", "shots_per_90", "dribbles_per_90",
+    "tackles_per_90", "interceptions_per_90", "pass_accuracy_pct",
+]
+
+
+@tool
+def find_similar_players(
+    player_name: str,
+    position: Optional[str] = None,
+    league: Optional[str] = None,
+    limit: int = 5,
+) -> str:
+    """Find players with the most similar statistical profile to a given player.
+    Uses per-90-minute stats (goals, assists, shots, dribbles, tackles, interceptions)
+    to calculate similarity via Euclidean distance. Optionally filter by position or league."""
+    players = _load_players()
+
+    # Find target player
+    target = None
+    for p in players:
+        if player_name.lower() in p.get("name", "").lower():
+            target = p
+            break
+
+    if not target:
+        return f"Player '{player_name}' not found in database."
+
+    target_stats = target.get("stats", {})
+    target_vector = [float(target_stats.get(k, 0) or 0) for k in _SIMILARITY_KEYS]
+
+    # Calculate distances
+    candidates = []
+    for p in players:
+        if p["id"] == target["id"]:
+            continue
+        if position and position.upper() not in p.get("position", "").upper():
+            continue
+        if league and league.lower() not in p.get("league", "").lower():
+            continue
+
+        p_stats = p.get("stats", {})
+        p_vector = [float(p_stats.get(k, 0) or 0) for k in _SIMILARITY_KEYS]
+
+        # Euclidean distance
+        dist = sum((a - b) ** 2 for a, b in zip(target_vector, p_vector)) ** 0.5
+        candidates.append((p, dist))
+
+    candidates.sort(key=lambda x: x[1])
+    candidates = candidates[:limit]
+
+    if not candidates:
+        return "No similar players found matching the criteria."
+
+    results = {
+        "target": {"name": target["name"], "club": target.get("club"),
+                    "position": target.get("position")},
+        "similar_players": [],
+    }
+    for p, dist in candidates:
+        s = p.get("stats", {})
+        results["similar_players"].append({
+            "name": p["name"],
+            "club": p.get("club"),
+            "league": p.get("league"),
+            "position": p.get("position"),
+            "age": p.get("age"),
+            "similarity_score": round(1 / (1 + dist), 3),
+            "goals_per_90": s.get("goals_per_90", 0),
+            "assists_per_90": s.get("assists_per_90", 0),
+            "dribbles_per_90": s.get("dribbles_per_90", 0),
+        })
+    return json.dumps(results, ensure_ascii=False, indent=2)

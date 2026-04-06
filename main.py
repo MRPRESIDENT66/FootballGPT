@@ -54,7 +54,11 @@ def run():
 
     # Each session gets a unique thread_id for conversation memory
     thread_id = str(uuid.uuid4())
-    config = {"configurable": {"thread_id": thread_id}}
+    config = {
+        "configurable": {"thread_id": thread_id},
+        "run_name": "FootballGPT-CLI",           # LangSmith trace name
+        "metadata": {"interface": "cli", "session_id": thread_id},
+    }
     turn_count = 0
 
     while True:

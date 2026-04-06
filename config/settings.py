@@ -16,5 +16,10 @@ class Settings:
     DATA_DIR: str = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
     KNOWLEDGE_DIR: str = os.path.join(os.path.dirname(os.path.dirname(__file__)), "knowledge")
 
+    # LangSmith Tracing (optional — set LANGSMITH_API_KEY to enable)
+    LANGSMITH_TRACING: bool = os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
+    LANGSMITH_API_KEY: str = os.getenv("LANGSMITH_API_KEY", "")
+    LANGSMITH_PROJECT: str = os.getenv("LANGCHAIN_PROJECT", "FootballGPT")
+
 
 settings = Settings()

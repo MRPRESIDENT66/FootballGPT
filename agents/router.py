@@ -42,7 +42,7 @@ Important rules:
 - Output ONLY the JSON, no other text"""
 
 
-def route_query(query: str, chat_history: list[dict] | None = None) -> dict:
+def route_query(query: str, chat_history=None) -> dict:
     """Classify user intent and extract parameters, using chat history for context."""
     import json
 
