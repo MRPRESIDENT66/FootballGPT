@@ -40,6 +40,7 @@ INTENT_LABELS = {
 
 NODE_LABELS = {
     "router": "🧭 Router — Classifying intent...",
+    "shared_retrieval": "📚 Retrieval — Gathering shared context...",
     "scout": "🔍 Scout — Searching players...",
     "analyst": "📊 Analyst — Analyzing data...",
     "tactics": "📋 Tactics — Evaluating fit...",
@@ -79,6 +80,10 @@ def run():
             "analysis": "",
             "tactical_context": "",
             "report": "",
+            "shared_knowledge": "",
+            "analyst_knowledge": "",
+            "tactics_knowledge": "",
+            "reporter_knowledge": "",
         }
 
         try:

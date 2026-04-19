@@ -5,6 +5,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 
 from config.settings import settings
 from knowledge.rag import search_football_knowledge
+from knowledge.retrieval import run_agent_retrieval
 from tools.player_db import get_team_stats, get_team_roster
 
 TACTICS_PROMPT = """You are a football tactics analyst. Evaluate tactical fit between players and teams.
@@ -21,7 +22,12 @@ Be concise (200 words max). Focus on:
 4. Key tactical considerations"""
 
 
-def run_tactics(query: str, criteria: dict, player_data: str = "") -> str:
+def run_tactics(
+    query: str,
+    criteria: dict,
+    player_data: str = "",
+    shared_knowledge: str = "",
+) -> tuple[str, str]:
     """Run tactics agent. Max 2 tool call rounds."""
     llm = ChatOpenAI(
         model=settings.LLM_MODEL,
@@ -31,9 +37,15 @@ def run_tactics(query: str, criteria: dict, player_data: str = "") -> str:
         **settings.NO_THINKING,
     ).bind_tools([search_football_knowledge, get_team_stats, get_team_roster])
 
+    task_knowledge = run_agent_retrieval("tactics", query, criteria, shared_knowledge)
+
     context = f"User query: {query}\nCriteria: {criteria}"
     if player_data:
         context += f"\n\nPlayer data:\n{player_data}"
+    if shared_knowledge:
+        context += f"\n\nShared knowledge:\n{shared_knowledge}"
+    if task_knowledge:
+        context += f"\n\nTactics-specific knowledge:\n{task_knowledge}"
 
     messages = [
         SystemMessage(content=TACTICS_PROMPT),
@@ -52,11 +64,11 @@ def run_tactics(query: str, criteria: dict, player_data: str = "") -> str:
         messages.append(response)
 
         if not response.tool_calls:
-            return response.content
+            return response.content, task_knowledge
 
         for tc in response.tool_calls:
             result = tool_map[tc["name"]].invoke(tc["args"])
             messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
 
     messages.append(HumanMessage(content="Now give your tactical assessment. Be concise."))
-    return llm.invoke(messages).content
+    return llm.invoke(messages).content, task_knowledge

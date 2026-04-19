@@ -5,7 +5,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 
 from config.settings import settings
 from tools.player_db import compare_players, get_player_details, find_similar_players, get_top_scorers
-from knowledge.rag import retrieve_knowledge
+from knowledge.retrieval import run_agent_retrieval
 
 ANALYST_PROMPT = """You are a professional football data analyst. Analyze the player data provided.
 
@@ -26,7 +26,12 @@ When analyzing:
 Be concise and data-driven. Limit to 300 words."""
 
 
-def run_analyst(player_data: str, criteria: dict, query: str) -> str:
+def run_analyst(
+    player_data: str,
+    criteria: dict,
+    query: str,
+    shared_knowledge: str = "",
+) -> tuple[str, str]:
     """Run the analyst agent. Max 2 tool call rounds."""
     llm = ChatOpenAI(
         model=settings.LLM_MODEL,
@@ -36,12 +41,19 @@ def run_analyst(player_data: str, criteria: dict, query: str) -> str:
         **settings.NO_THINKING,
     ).bind_tools([compare_players, get_player_details, find_similar_players, get_top_scorers])
 
-    # RAG: retrieve relevant player backgrounds for richer analysis
-    knowledge = retrieve_knowledge(query, entity_type="player", limit=5)
+    task_knowledge = run_agent_retrieval(
+        "analyst",
+        query,
+        criteria,
+        shared_knowledge,
+        player_data=player_data,
+    )
 
     content = f"User query: {query}\nCriteria: {criteria}\nPlayer data:\n{player_data}\n\n"
-    if knowledge:
-        content += f"Wikipedia background:\n{knowledge}\n\n"
+    if shared_knowledge:
+        content += f"Shared knowledge:\n{shared_knowledge}\n\n"
+    if task_knowledge:
+        content += f"Analyst-specific knowledge:\n{task_knowledge}\n\n"
     content += "Analyze briefly. Use tools only if needed for direct comparison."
 
     messages = [
@@ -61,7 +73,7 @@ def run_analyst(player_data: str, criteria: dict, query: str) -> str:
         messages.append(response)
 
         if not response.tool_calls:
-            return response.content
+            return response.content, task_knowledge
 
         for tc in response.tool_calls:
             result = tool_map[tc["name"]].invoke(tc["args"])
@@ -87,6 +99,6 @@ If no, respond with what's missing and provide the corrected analysis."""
 
     if "PASS" not in reflection.upper().split("\n")[0]:
         # Reflection found issues — use the corrected version
-        return reflection
+        return reflection, task_knowledge
 
-    return analysis
+    return analysis, task_knowledge

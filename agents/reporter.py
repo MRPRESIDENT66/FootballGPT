@@ -4,7 +4,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from config.settings import settings
-from knowledge.rag import retrieve_knowledge
+from knowledge.retrieval import run_agent_retrieval
 
 REPORTER_PROMPT = """You are a football report writer. Synthesize the analysis below into a clear, detailed report.
 
@@ -25,7 +25,14 @@ Guidelines:
 - No filler or disclaimers"""
 
 
-def run_reporter(query: str, scout_data: str, analysis: str, tactical_context: str) -> str:
+def run_reporter(
+    query: str,
+    scout_data: str,
+    analysis: str,
+    tactical_context: str,
+    criteria: dict,
+    shared_knowledge: str = "",
+) -> tuple[str, str]:
     """Generate final report from all gathered information."""
     llm = ChatOpenAI(
         model=settings.LLM_MODEL,
@@ -42,11 +49,19 @@ def run_reporter(query: str, scout_data: str, analysis: str, tactical_context: s
         parts.append(f"## Analysis\n{analysis}")
     if tactical_context:
         parts.append(f"## Tactical Context\n{tactical_context}")
+    if shared_knowledge:
+        parts.append(f"## Shared Knowledge\n{shared_knowledge}")
 
-    # RAG: add team/season background for richer reports
-    knowledge = retrieve_knowledge(query, limit=5)
-    if knowledge:
-        parts.append(f"## Wikipedia Background\n{knowledge}")
+    task_knowledge = run_agent_retrieval(
+        "reporter",
+        query,
+        criteria,
+        shared_knowledge,
+        player_data=scout_data,
+        analysis=analysis,
+    )
+    if task_knowledge:
+        parts.append(f"## Reporter Knowledge\n{task_knowledge}")
 
     messages = [
         SystemMessage(content=REPORTER_PROMPT),
@@ -84,4 +99,4 @@ Respond with ONLY a JSON object: {{"score": <int>, "feedback": "<what's missing 
     except (json.JSONDecodeError, KeyError):
         pass  # If eval parsing fails, keep original report
 
-    return report
+    return report, task_knowledge

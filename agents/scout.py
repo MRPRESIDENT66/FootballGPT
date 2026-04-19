@@ -1,11 +1,10 @@
-"""Scout Agent — searches players from database and enriches with Wikipedia knowledge."""
+"""Scout Agent — searches players from database and enriches with shared knowledge."""
 
-from tools.player_db import search_players, get_player_details, get_team_roster
-from knowledge.rag import retrieve_knowledge
+from tools.player_db import search_players, get_team_roster
 
 
-def run_scout(criteria: dict, query: str) -> str:
-    """Search players using criteria, then enrich top results with Wikipedia background."""
+def run_scout(criteria: dict, query: str, shared_knowledge: str = "") -> str:
+    """Search players using criteria, then attach shared retrieval context."""
     # Build search args from router-extracted parameters
     search_args = {}
     param_map = {
@@ -32,15 +31,7 @@ def run_scout(criteria: dict, query: str) -> str:
         roster = get_team_roster.invoke({"club_name": team})
         result += f"\n\n--- Current {team} roster in database ---\n{roster}"
 
-    # RAG: enrich with Wikipedia background (playing style, career history)
-    knowledge = retrieve_knowledge(
-        query,
-        entity_type="player",
-        position=criteria.get("position"),
-        league=criteria.get("league"),
-        limit=5,
-    )
-    if knowledge:
-        result += f"\n\n--- Wikipedia Background ---\n{knowledge}"
+    if shared_knowledge:
+        result += f"\n\n--- Shared Knowledge ---\n{shared_knowledge}"
 
     return result

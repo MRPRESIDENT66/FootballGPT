@@ -13,6 +13,7 @@ _app = build_workflow()
 # Node progress labels
 NODE_LABELS = {
     "router": "🧭 Router — Classifying intent...",
+    "shared_retrieval": "📚 Retrieval — Gathering shared context...",
     "scout": "🔍 Scout — Searching players...",
     "analyst": "📊 Analyst — Analyzing data...",
     "tactics": "📋 Tactics — Evaluating fit...",
@@ -43,6 +44,10 @@ def chat(message: str, history: list, session_state: dict):
         "analysis": "",
         "tactical_context": "",
         "report": "",
+        "shared_knowledge": "",
+        "analyst_knowledge": "",
+        "tactics_knowledge": "",
+        "reporter_knowledge": "",
     }
 
     # Stream node progress

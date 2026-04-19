@@ -9,6 +9,7 @@ class Settings:
     DASHSCOPE_BASE_URL: str = os.getenv("DASHSCOPE_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1")
     LLM_MODEL: str = os.getenv("CHAT_MODEL", "qwen3.5-plus")
     ROUTER_MODEL: str = os.getenv("ROUTER_MODEL", "qwen-plus")  # lightweight, no thinking
+    RETRIEVAL_MODEL: str = os.getenv("RETRIEVAL_MODEL", "qwen-plus")
     EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "text-embedding-v4")
     FOOTBALL_API_KEY: str = os.getenv("FOOTBALL_API_KEY", "")
     TEMPERATURE: float = 0.3

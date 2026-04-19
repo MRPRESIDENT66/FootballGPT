@@ -22,6 +22,7 @@ from agents.analyst import run_analyst
 from agents.tactics import run_tactics
 from agents.reporter import run_reporter
 from knowledge.memory import VectorMemory
+from knowledge.retrieval import build_shared_knowledge
 from utils import clean_surrogates
 from config.settings import settings
 
@@ -37,6 +38,10 @@ class FootballState(TypedDict):
     analysis: str
     tactical_context: str
     report: str
+    shared_knowledge: str
+    analyst_knowledge: str
+    tactics_knowledge: str
+    reporter_knowledge: str
     chat_history: Annotated[list[dict], add]  # accumulates across turns
 
 
@@ -86,31 +91,54 @@ def router_node(state: FootballState) -> dict:
 
 def scout_node(state: FootballState) -> dict:
     """Find players matching criteria."""
-    data = clean_surrogates(run_scout(state["parameters"], state["query"]))
+    data = clean_surrogates(run_scout(
+        state["parameters"],
+        state["query"],
+        state.get("shared_knowledge", ""),
+    ))
     return {"scout_data": data}
 
 
 def analyst_node(state: FootballState) -> dict:
     """Analyze player data."""
-    data = clean_surrogates(run_analyst(state["scout_data"], state["parameters"], state["query"]))
-    return {"analysis": data}
+    data, knowledge = run_analyst(
+        state["scout_data"],
+        state["parameters"],
+        state["query"],
+        state.get("shared_knowledge", ""),
+    )
+    return {
+        "analysis": clean_surrogates(data),
+        "analyst_knowledge": clean_surrogates(knowledge),
+    }
 
 
 def tactics_node(state: FootballState) -> dict:
     """Evaluate tactical fit."""
     player_data = state.get("scout_data", "") or state.get("analysis", "")
-    data = clean_surrogates(run_tactics(state["query"], state["parameters"], player_data))
-    return {"tactical_context": data}
+    data, knowledge = run_tactics(
+        state["query"],
+        state["parameters"],
+        player_data,
+        state.get("shared_knowledge", ""),
+    )
+    return {
+        "tactical_context": clean_surrogates(data),
+        "tactics_knowledge": clean_surrogates(knowledge),
+    }
 
 
 def reporter_node(state: FootballState) -> dict:
     """Generate final report and store turn in vector memory."""
-    report = clean_surrogates(run_reporter(
+    report, knowledge = run_reporter(
         state["query"],
         state.get("scout_data", ""),
         state.get("analysis", ""),
         state.get("tactical_context", ""),
-    ))
+        state.get("parameters", {}),
+        state.get("shared_knowledge", ""),
+    )
+    report = clean_surrogates(report)
     # Store this turn in vector memory for semantic retrieval in future turns
     _vector_memory.add_turn(state["query"], state["intent"], report)
 
@@ -119,7 +147,21 @@ def reporter_node(state: FootballState) -> dict:
         "intent": state["intent"],
         "report_summary": report[:500],
     }
-    return {"report": report, "chat_history": [turn_record]}
+    return {
+        "report": report,
+        "reporter_knowledge": clean_surrogates(knowledge),
+        "chat_history": [turn_record],
+    }
+
+
+def shared_retrieval_node(state: FootballState) -> dict:
+    """Retrieve shared baseline knowledge once per turn."""
+    knowledge = clean_surrogates(build_shared_knowledge(
+        state["query"],
+        state["intent"],
+        state.get("parameters", {}),
+    ))
+    return {"shared_knowledge": knowledge}
 
 
 # ---- Conditional routing ----
@@ -136,6 +178,11 @@ def route_by_intent(state: FootballState) -> list[str]:
     elif intent == "tactics":
         return ["tactics"]
     return ["scout"]
+
+
+def fan_out_after_shared(state: FootballState) -> list[str]:
+    """Route after shared retrieval has populated baseline context."""
+    return route_by_intent(state)
 
 
 def after_scout(state: FootballState) -> str:
@@ -166,6 +213,7 @@ def build_workflow():
 
     # Add nodes
     workflow.add_node("router", router_node)
+    workflow.add_node("shared_retrieval", shared_retrieval_node)
     workflow.add_node("scout", scout_node)
     workflow.add_node("analyst", analyst_node)
     workflow.add_node("tactics", tactics_node)
@@ -175,10 +223,13 @@ def build_workflow():
     # Entry point
     workflow.set_entry_point("router")
 
-    # Router → fan-out based on intent
+    # Router → shared retrieval
+    workflow.add_edge("router", "shared_retrieval")
+
+    # Shared retrieval → fan-out based on intent
     workflow.add_conditional_edges(
-        "router",
-        route_by_intent,
+        "shared_retrieval",
+        fan_out_after_shared,
         ["scout", "analyst", "tactics"],
     )
 
